@@ -1,0 +1,36 @@
+# This a sample parameter to run PS_DISP 1.0 script
+
+################ SET PARAMETER ###########################
+process = EXTERNAL
+#         * could be STAMPS || EXTERNAL
+method = neighbour
+#         * could be surface || neighbour
+##########################################################
+resolution = 0.000046296
+radius = 0.000277778
+region = 90.57524456/90.61382216/30.4454576/30.5652981
+ts_path = timeseries
+aspect = asc_aspect.txt
+################# STAMPS data (mat file) #################
+input_asc = 
+loc_asc = 
+input_dsc = 
+loc_dsc = 
+input_TS_asc = 
+input_TS_dsc = 
+topo_asc = 
+topo_dsc = 
+################# EXTERNAL data (txt file) ###############
+input_ex_asc = asc_mean_velocity.txt
+input_ex_dsc = desc_mean_velocity.txt
+TS_asc_ex = asc_timeseries.txt
+TS_dsc_ex = desc_timeseries.txt
+lonlat_asc_ex = asc_lon_lat.txt
+lonlat_dsc_ex = desc_lon_lat.txt
+TS_day_asc_ex  = asc_date.txt
+TS_day_dsc_ex = desc_date.txt
+azimuth_data_asc = asc_azimuth.txt
+incidence_data_asc = asc_incidence.txt
+azimuth_data_dsc = desc_azimuth.txt
+incidence_data_dsc = desc_incidence.txt
+##########################################################

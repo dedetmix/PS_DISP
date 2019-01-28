@@ -1,0 +1,1030 @@
+#!/bin/bash
+
+# PS_DISP 1.0
+# Script to generate 2d/3d displacement from ascending and descending SAR data
+# the third component (north-southward) assuming has a parallel direction to aspect (source : DEM)
+
+# Created by Noorlaila Isya	21.08.2018
+# 	     IGP, TU Braunschweig - Germany
+
+  dir=$(pwd)
+  if [[ $# -ne 2 ]]; then
+    echo ""
+    echo "Usage: PS_DISP [mode] [PATH_parameter]"
+    echo ""
+    echo "  Script to prepare and calculate 2d/3d displacement"
+    echo ""
+    echo "  example : PS_DISP 1 /home/isya/3d_disp/param_PS_DISP.txt"
+    echo ""
+    echo "  Mode: THE MEAN VELOCITY --> "
+    echo "        1 Prepare LOS asc and dsc files using Surface || Nearneighbour method"
+    echo "        2 Compute azimuth and incidence angle from the master scene asc & dsc"
+    echo "        3 Compute 2d displacement (vertical & west-eastward) components for the mean velocity"
+    echo "        4 Compute 3d (psuedo) displacement (vertical & horizontal) components for the mean velocity"
+    echo ""
+    echo "        TIMESERIES --> "
+    echo "        5 Prepare LOS asc and dsc files for time series (TS) using Surface || Nearneighbour method"
+    echo "        6 Compute 2d displacement (vertical & west-eastward) components for timeseries"
+    echo "        7 Compute 3d (psuedo) displacement (vertical & horizontal) components for timeseries"
+    echo ""
+    echo "        PLOT --> "
+    echo "        8 Plot vertical and horizontal displacement of mean velocity"
+    echo "        9 Plot vertical and horizontal displacements for timeseries"
+    echo "        10 Plot graphic displacement at a selected location (timeseries)"
+    echo ""
+    echo "        Standard Statistical Computation --> "
+    echo "        11 Compute standard deviation of mean velocity"
+    echo "        12 Compute standard deviation for timeseries"
+    echo ""
+    echo "        3D COMBO --> "
+    echo "        13 Calculate 3d displacement from LOS and Along Track (AZI) ascending and descending data at a single different time"
+    echo ""
+    exit 1
+  fi
+
+mode=$1
+path=$2
+
+# define parameter from param_PS_DISP.txt
+process=$(grep process $path | sed 's/^.*= //')
+method=$(grep method $path | sed 's/^.*= //'); echo $method > method.txt
+resolution=$(grep resolution $path | sed 's/^.*= //')
+radius=$(grep radius $path | sed 's/^.*= //')
+region=$(grep region $path | sed 's/^.*= //')
+ts_path=$(grep ts_path $path | sed 's/^.*= //')
+aspect=$(grep aspect $path | sed 's/^.*= //')
+topo_asc=$(grep topo_asc $path | sed 's/^.*= //')
+topo_dsc=$(grep topo_dsc $path | sed 's/^.*= //')
+scale_velo=0.03   #0.01 default
+
+echo " "
+echo "Mode ---->>" $mode
+echo " "
+
+# going to Mode 1 
+if [ $mode -eq 1 ]; then
+
+   if [ $process = "STAMPS" ]; then
+   
+      echo "--------------> Files are from STAMPS"
+      # define parameter from param_PS_DISP.txt (STAMPS format)
+      input_asc=$(grep input_asc $path | sed 's/^.*= //')
+      input_dsc=$(grep input_dsc $path | sed 's/^.*= //')
+      loc_asc=$(grep loc_asc $path | sed 's/^.*= //')
+      loc_dsc=$(grep loc_dsc $path | sed 's/^.*= //')
+      echo $input_asc > asc.txt
+      echo $input_dsc > dsc.txt
+      echo $loc_asc > loc_asc.txt
+      echo $loc_dsc > loc_dsc.txt
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('1');exit"
+      rm -f asc.txt dsc.txt loc_asc.txt loc_dsc.txt
+
+   elif [ $process = "EXTERNAL" ]; then
+
+      echo "--------------> Files are directly from user input (external txt format with comma dilimited)"
+      echo "--------------> Change automatically the method to -nearneighbour-, external data could only run using nearneighbour method"
+      method=neighbour
+      # define parameter from param_PS_DISP.txt (EXTERNAL format)
+      input_asc_ex=$(grep input_ex_asc $path | sed 's/^.*= //')
+      input_dsc_ex=$(grep input_ex_dsc $path | sed 's/^.*= //')
+      cp $input_asc_ex los_asc.txt
+      cp $input_dsc_ex los_dsc.txt
+
+   else
+      echo "--------------> Input: process is unknown"
+   fi
+
+   if [ -f $aspect ]; then
+      echo "File $aspect exists."
+      gmt xyz2grd $aspect -Ddegree/degree/degree/1/0 -Gaspect.grd -I0.001 -R$region -V
+      gmt grdsample aspect.grd -I$resolution -Gaspect_re.grd
+      gmt grd2xyz -R$region aspect_re.grd > aspect.xyz
+   else
+      echo "File $aspect does not exist, it's okay to run 2D displacement but not 3D"
+   fi
+
+   if [ $method = "surface" ]; then
+      
+      # gridding asc & dsc using gmt surface function
+      echo "--------------> Prepare LOS asc and dsc files using surface method"
+      gmt surface los_asc.txt -R$region -I$resolution -Glos_asc_surface.grd -T0.25 -C0.1
+      gmt surface los_dsc.txt -R$region -I$resolution -Glos_dsc_surface.grd -T0.25 -C0.1
+      gmt grd2xyz -R$region los_asc_surface.grd > los_asc_surface.xyz
+      gmt grd2xyz -R$region los_dsc_surface.grd > los_dsc_surface.xyz
+      
+      cd $topo_asc/../raw
+      cp $GMTSAR/gmtsar/filters/gauss5x5 gauss_5x5
+      proj_ra2ll.csh $topo_asc/trans.dat scatter.grd scatter_ll.grd
+      gmt grdmath scatter_ll.grd 0.6 LT 0 NAN scatter_ll.grd MUL = mask.grd
+      gmt grdsample mask.grd -I$resolution -R$region -T -Gmask_re.grd
+      gmt grd2xyz -R$region mask_re.grd > mask_re.xyz
+      cd $dir
+      ln -s $topo_asc/../raw/mask_re.xyz .
+
+   elif [ $method = "neighbour" ]; then
+
+      # gridding asc & dsc using gmt nearneighbour function
+      echo "--------------> Prepare LOS asc and dsc files using nearneighbour method"
+      gmt nearneighbor los_asc.txt -R$region -I$resolution -S$radius -Glos_asc.grd -N1
+      gmt nearneighbor los_dsc.txt -R$region -I$resolution -S$radius -Glos_dsc.grd -N1
+      gmt grd2xyz -R$region los_asc.grd > los_asc_nn.xyz
+      gmt grd2xyz -R$region los_dsc.grd > los_dsc_nn.xyz
+
+   else
+      echo "--------------> Input: method is unknown"
+   fi
+
+fi
+
+# going to Mode 2 
+if [ $mode -eq 2 ]; then
+   echo "--------------> Compute azimuth and incidence angle from the master scene"
+
+   if [ $process = "STAMPS" ]; then
+
+      ## run on topo folder for ascending data
+      cd $topo_asc
+      gmt grdcut dem.grd -Gdem_cut.grd -R$region -V
+      gmt grdsample dem_cut.grd -I$resolution -R$region -Gdem_cut_fix.grd
+      gmt grd2xyz dem_cut_fix.grd > dem.xyz
+      SAT_look master.PRM < dem.xyz > dem_look.lltn
+      awk '{print $5}' dem_look.lltn > look_N
+      awk '{print $4}' dem_look.lltn > look_E
+      awk '{print $6}' dem_look.lltn > look_U
+
+      # calculate azimuth angle
+      gmt math look_N look_E ATAN2 = theta_look #(in radians)
+
+      # calculate incidence angle
+      gmt math look_E SQR = look_E_2
+      gmt math look_N SQR = look_N_2
+      gmt math look_E_2 look_N_2 ADD = look_E_N_2
+      gmt math look_E_N_2 SQRT = look_E_N_sqrt
+      gmt math look_U look_E_N_sqrt DIV = look_U_en
+      gmt math look_U_en ATAN = inc_angle #(in radians)
+      gmt math theta_look R2D = theta_look_degree
+      gmt math 180 theta_look_degree ADD -1 MUL = theta_look_degree_c
+      gmt math inc_angle R2D = inc_angle_degree
+
+      awk '{print $1"\t"$2}' dem_look.lltn > ll
+      paste -d"\t" ll inc_angle_degree > inc_angle.lld
+      paste -d"\t" ll theta_look_degree_c > az_angle.lld
+      cp inc_angle.lld $dir/inc_angle_asc.lld
+      cp az_angle.lld $dir/az_angle_asc.lld
+
+      # inc and az angle convert to grid
+      gmt xyz2grd inc_angle.lld -Dm/m/m/1/0 -Ginc_angle_asc.grd -I$resolution -R$region -V
+      gmt xyz2grd az_angle.lld -Dm/m/m/1/0 -Gaz_angle_asc.grd -I$resolution -R$region -V
+
+      rm -f look_N look_E look_U look_E_2 look_N_2 look_E_N_2 look_E_N_sqrt look_U_en inc_angle inc_angle_degree theta_look_degree theta_look_degree_c ll dem.xyz dem_cut.grd theta_look dem_cut_fix.grd #dem_look.lltn
+      cd $dir
+
+      ## run on topo folder for descending data
+      cd $topo_dsc
+      gmt grdcut dem.grd -Gdem_cut.grd -R$region -V
+      gmt grdsample dem_cut.grd -I$resolution -R$region -Gdem_cut_fix.grd
+      gmt grd2xyz dem_cut_fix.grd > dem.xyz
+      SAT_look master.PRM < dem.xyz > dem_look.lltn
+      awk '{print $5}' dem_look.lltn > look_N
+      awk '{print $4}' dem_look.lltn > look_E
+      awk '{print $6}' dem_look.lltn > look_U
+
+      # calculate azimuth angle
+      gmt math look_N look_E ATAN2 = theta_look #(in radians)
+
+      # calculate incidence angle
+      gmt math look_E SQR = look_E_2
+      gmt math look_N SQR = look_N_2
+      gmt math look_E_2 look_N_2 ADD = look_E_N_2
+      gmt math look_E_N_2 SQRT = look_E_N_sqrt
+      gmt math look_U look_E_N_sqrt DIV = look_U_en
+      gmt math look_U_en ATAN = inc_angle #(in radians)
+      gmt math theta_look R2D = theta_look_degree
+      gmt math 180 theta_look_degree ADD -1 MUL = theta_look_degree_c
+      gmt math inc_angle R2D = inc_angle_degree
+
+      awk '{print $1"\t"$2}' dem_look.lltn > ll
+      paste -d"\t" ll inc_angle_degree > inc_angle.lld
+      paste -d"\t" ll theta_look_degree_c > az_angle.lld
+      cp inc_angle.lld $dir/inc_angle_dsc.lld
+      cp az_angle.lld $dir/az_angle_dsc.lld
+
+      # inc and az angle convert to grid
+      gmt xyz2grd inc_angle.lld -Dm/m/m/1/0 -Ginc_angle_dsc.grd -I$resolution -R$region -V
+      gmt xyz2grd az_angle.lld -Dm/m/m/1/0 -Gaz_angle_dsc.grd -I$resolution -R$region -V
+
+      rm -f look_N look_E look_U look_E_2 look_N_2 look_E_N_2 look_E_N_sqrt look_U_en inc_angle inc_angle_degree theta_look_degree theta_look_degree_c ll dem.xyz dem_cut.grd theta_look dem_cut_fix.grd #dem_look.lltn
+      cd $dir
+ 
+   elif [ $process = "EXTERNAL" ]; then
+      
+      # define additional parameters
+      azimuth_data_asc=$(grep azimuth_data_asc $path | sed 's/^.*= //')
+      incidence_data_asc=$(grep incidence_data_asc $path | sed 's/^.*= //')
+      azimuth_data_dsc=$(grep azimuth_data_dsc $path | sed 's/^.*= //')
+      incidence_data_dsc=$(grep incidence_data_dsc $path | sed 's/^.*= //')    
+
+      ## prepare azimuth and incidence angle to matlab format
+      # for ascending data
+      gmt xyz2grd $incidence_data_asc -Dm/m/m/1/0 -Ginc_angle_asc.grd -I$resolution -R$region -V
+      gmt xyz2grd $azimuth_data_asc -Dm/m/m/1/0 -Gaz_angle_asc.grd -I$resolution -R$region -V
+      gmt grdcut inc_angle_asc.grd -Ginc_angle_asc_cut.grd -R$region -V
+      gmt grdsample inc_angle_asc_cut.grd -I$resolution -Ginc_angle_asc_cut_fix.grd
+      gmt grd2xyz inc_angle_asc_cut_fix.grd > inc_angle_asc.lld
+      gmt grdcut az_angle_asc.grd -Gaz_angle_asc_cut.grd -R$region -V
+      gmt grdsample az_angle_asc_cut.grd -I$resolution -Gaz_angle_asc_cut_fix.grd
+      gmt grd2xyz az_angle_asc_cut_fix.grd > az_angle_asc.lld
+      rm -f inc_angle_asc.grd inc_angle_asc_cut.grd inc_angle_asc_cut_fix.grd az_angle_asc.grd az_angle_asc_cut.grd az_angle_asc_cut_fix.grd
+      # for descending data
+      gmt xyz2grd $incidence_data_dsc -Dm/m/m/1/0 -Ginc_angle_dsc.grd -I$resolution -R$region -V
+      gmt xyz2grd $azimuth_data_dsc -Dm/m/m/1/0 -Gaz_angle_dsc.grd -I$resolution -R$region -V
+      gmt grdcut inc_angle_dsc.grd -Ginc_angle_dsc_cut.grd -R$region -V
+      gmt grdsample inc_angle_dsc_cut.grd -I$resolution -Ginc_angle_dsc_cut_fix.grd
+      gmt grd2xyz inc_angle_dsc_cut_fix.grd > inc_angle_dsc.lld
+      gmt grdcut az_angle_dsc.grd -Gaz_angle_dsc_cut.grd -R$region -V
+      gmt grdsample az_angle_dsc_cut.grd -I$resolution -Gaz_angle_dsc_cut_fix.grd
+      gmt grd2xyz az_angle_dsc_cut_fix.grd > az_angle_dsc.lld
+      rm -f inc_angle_dsc.grd inc_angle_dsc_cut.grd inc_angle_dsc_cut_fix.grd az_angle_dsc.grd az_angle_dsc_cut.grd az_angle_dsc_cut_fix.grd
+      # modify the azimuth angle to platform heading
+      #matlab -nodesktop -nodisplay -r "PS_DISP_matlab('azimuth_change');exit"
+
+   else
+      echo "--------------> Input: process is unknown"
+   fi
+
+   # export to matlab format
+   if [ $method = "surface" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('2');exit"
+   elif [ $method = "neighbour" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('3');exit"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+fi
+
+# going to Mode 3 
+if [ $mode -eq 3 ]; then
+   echo "--------------> Compute 2d displacement (vertical & west-eastward) components for the mean velocity --"
+   echo "--------------> -- using original least square (OLS) method"
+   if [ $method = "surface" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('4');exit"
+      mv generate_2d.mat generate_2d_surface.mat
+      mv dU.txt dU_2d_surf.txt
+      mv dE.txt dE_2d_surf.txt
+      mv ver_scale.txt ver_scale_2d_surf.txt 
+   elif [ $method = "neighbour" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('4');exit"
+      mv generate_2d.mat generate_2d_nn.mat
+      mv dU.txt dU_2d_nn.txt
+      mv dE.txt dE_2d_nn.txt
+      mv ver_scale.txt ver_scale_2d_nn.txt 
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+fi
+
+# going to Mode 4 
+if [ $mode -eq 4 ]; then
+   echo "--------------> Compute 3d (psuedo) displacement (vertical & horizontal) components for the mean velocity --"
+   echo "--------------> -- using original least square (OLS) method"
+   if [ $method = "surface" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('theta');exit"
+      matlab -nodesktop -nodisplay -r "pseudo_disp_generate('mean');exit"
+      mv generate_3d_pseudo.mat generate_3d_surface.mat
+      mv dU.txt dU_3d_surf.txt
+      mv dE.txt dE_3d_surf.txt
+      mv dN.txt dN_3d_surf.txt
+      mv ver_scale.txt ver_scale_3d_surf.txt 
+   elif [ $method = "neighbour" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('theta');exit"
+      matlab -nodesktop -nodisplay -r "pseudo_disp_generate('mean');exit"
+      mv generate_3d_pseudo.mat generate_3d_nn.mat
+      mv dU.txt dU_3d_nn.txt
+      mv dE.txt dE_3d_nn.txt
+      mv dN.txt dN_3d_nn.txt
+      mv ver_scale.txt ver_scale_3d_nn.txt 
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+fi
+
+# going to Mode 5 
+if [ $mode -eq 5 ]; then
+   echo "--------------> Prepare LOS asc and dsc files for time series (TS) using Surface || Nearneighbour method"
+   cd $ts_path
+   echo $process > process.txt
+   if [ $process = "STAMPS" ]; then
+
+      asc_inputTS=$(grep input_TS_asc $path | sed 's/^.*= //')
+      dsc_inputTS=$(grep input_TS_dsc $path | sed 's/^.*= //')
+      echo $asc_inputTS > asc_inputTS.txt
+      echo $dsc_inputTS > dsc_inputTS.txt
+
+      # interpolate asc & dsc data in time
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('5');exit"
+      rm asc_inputTS.txt dsc_inputTS.txt
+   
+   elif [ $process = "EXTERNAL" ]; then
+   
+      TS_asc_ex=$(grep TS_asc_ex $path | sed 's/^.*= //'); ln -s $TS_asc_ex 01.txt
+      TS_dsc_ex=$(grep TS_dsc_ex $path | sed 's/^.*= //'); ln -s $TS_dsc_ex 02.txt
+      lonlat_asc_ex=$(grep lonlat_asc_ex $path | sed 's/^.*= //'); ln -s $lonlat_asc_ex 03.txt
+      lonlat_dsc_ex=$(grep lonlat_dsc_ex $path | sed 's/^.*= //'); ln -s $lonlat_dsc_ex 04.txt
+      lonlat_asc_ex=$(grep lonlat_asc_ex $path | sed 's/^.*= //'); ln -s $lonlat_asc_ex lonlat_asc.txt
+      lonlat_dsc_ex=$(grep lonlat_dsc_ex $path | sed 's/^.*= //'); ln -s $lonlat_dsc_ex lonlat_dsc.txt
+      day_asc_ex=$(grep TS_day_asc_ex $path | sed 's/^.*= //'); ln -s $day_asc_ex 05.txt
+      day_dsc_ex=$(grep TS_day_dsc_ex $path | sed 's/^.*= //'); ln -s $day_dsc_ex 06.txt
+
+      # interpolate asc & dsc data in time
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('5');exit"
+      rm 01.txt 02.txt 03.txt 04.txt 05.txt 06.txt
+
+   else
+      echo "--------------> Input: process is unknown"
+   fi
+   cd ..
+
+   # resample (gridding) asc & dsc data in spasial
+   if [ $method = "surface" ]; then
+      cd $ts_path
+      #mkdir -p TXT
+      n=$(head -n 1 ts_asc.txt | awk '{ print NF}')
+      rm -f asc_surface.xyz dsc_surface.xyz
+ 
+      for (( i=1; i<=$n; i++ ))
+      do
+          awk -v c=$i '{print $c}' ts_asc.txt > tmp_asc
+          awk -v c=$i '{print $c}' ts_dsc.txt > tmp_dsc
+          paste -d\,  lonlat_asc.txt tmp_asc > asc.in
+          paste -d\,  lonlat_dsc.txt tmp_dsc > dsc.in
+	  gmt surface asc.in -R$region -I$resolution -Gasc_surface.grd -T0.1 -C0.5
+	  gmt surface dsc.in -R$region -I$resolution -Gdsc_surface.grd -T0.1 -C0.5
+          if [ $i == 1 ]; then
+	     gmt grd2xyz -R$region asc_surface.grd -Z > asc_surface.xyz
+	     gmt grd2xyz -R$region dsc_surface.grd -Z > dsc_surface.xyz
+          else
+             gmt grd2xyz -R$region asc_surface.grd -Z > asc_surface_tmp.xyz
+	     paste -d\,  asc_surface.xyz asc_surface_tmp.xyz > asc_surface_tmp2.xyz
+             mv asc_surface_tmp2.xyz asc_surface.xyz
+             gmt grd2xyz -R$region dsc_surface.grd -Z > dsc_surface_tmp.xyz
+             paste -d\,  dsc_surface.xyz dsc_surface_tmp.xyz > dsc_surface_tmp2.xyz
+             mv dsc_surface_tmp2.xyz dsc_surface.xyz 
+          fi
+          rm tmp_asc asc.in tmp_dsc dsc.in asc_surface_tmp.xyz dsc_surface_tmp.xyz asc_surface.grd dsc_surface.grd
+       done
+       cd .. 
+
+   elif [ $method = "neighbour" ]; then
+
+      cd $ts_path
+      #mkdir -p TXT
+      n=$(head -n 1 ts_asc.txt | awk '{ print NF}')
+      rm -f asc_nn.xyz dsc_nn.xyz
+ 
+      for (( i=1; i<=$n; i++ ))
+      do
+          awk -v c=$i '{print $c}' ts_asc.txt > tmp_asc
+          awk -v c=$i '{print $c}' ts_dsc.txt > tmp_dsc
+          paste -d\,  lonlat_asc.txt tmp_asc > asc.in
+          paste -d\,  lonlat_dsc.txt tmp_dsc > dsc.in
+          gmt nearneighbor asc.in -R$region -I$resolution -S$radius -Gasc_nn.grd -N1
+          gmt nearneighbor dsc.in -R$region -I$resolution -S$radius -Gdsc_nn.grd -N1
+          if [ $i == 1 ]; then
+	     gmt grd2xyz -R$region asc_nn.grd -Z > asc_nn.xyz
+	     gmt grd2xyz -R$region dsc_nn.grd -Z > dsc_nn.xyz
+          else
+             gmt grd2xyz -R$region asc_nn.grd -Z > asc_nn_tmp.xyz
+	     paste -d\,  asc_nn.xyz asc_nn_tmp.xyz > asc_nn_tmp2.xyz
+             mv asc_nn_tmp2.xyz asc_nn.xyz
+             gmt grd2xyz -R$region dsc_nn.grd -Z > dsc_nn_tmp.xyz
+             paste -d\,  dsc_nn.xyz dsc_nn_tmp.xyz > dsc_nn_tmp2.xyz
+             mv dsc_nn_tmp2.xyz dsc_nn.xyz 
+          fi
+          rm -f tmp_asc asc.in tmp_dsc dsc.in asc_nn_tmp.xyz dsc_nn_tmp.xyz asc_nn.grd dsc_nn.grd
+       done
+       cd .. 
+
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+
+fi
+
+# going to Mode 6 
+if [ $mode -eq 6 ]; then
+   echo "--------------> Compute 2d displacement (vertical & west-eastward) components for timeseries --"
+   echo "--------------> -- using original least square (OLS) method"
+
+   cd $ts_path
+   if [ $method = "surface" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('6');exit"
+      mv generate.mat generate_2d_surface.mat
+      mv dU_ts.txt dU_ts_2d_surf.txt
+      mv dE_ts.txt dE_ts_2d_surf.txt
+      mv ver_scale.txt ver_scale_2d_surf.txt
+   elif [ $method = "neighbour" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('7');exit"
+      mv generate.mat generate_2d_nn.mat
+      mv dU_ts.txt dU_ts_2d_nn.txt
+      mv dE_ts.txt dE_ts_2d_nn.txt
+      mv ver_scale.txt ver_scale_2d_nn.txt
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+   cd ..
+fi
+
+# going to Mode 7 
+if [ $mode -eq 7 ]; then
+   echo "--------------> Compute 3d (psuedo) displacement (vertical & horizontal) components for timeseries --"
+   echo "--------------> -- using original least square (OLS) method"
+   cd $ts_path
+   if [ $method = "surface" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('theta');exit"
+      matlab -nodesktop -nodisplay -r "pseudo_disp_generate('ts');exit"
+      mv generate_3d_pseudo.mat generate_3d_surface.mat
+      mv dU_ts.txt dU_ts_3d_surf.txt
+      mv dE_ts.txt dE_ts_3d_surf.txt
+      mv dN_ts.txt dN_ts_3d_surf.txt
+      mv ver_scale.txt ver_scale_3d_surf.txt
+   elif [ $method = "neighbour" ]; then
+      matlab -nodesktop -nodisplay -r "PS_DISP_matlab('theta');exit"
+      matlab -nodesktop -nodisplay -r "pseudo_disp_generate('ts');exit"
+      mv generate_3d_pseudo.mat generate_3d_nn.mat
+      mv dU_ts.txt dU_ts_3d_nn.txt
+      mv dE_ts.txt dE_ts_3d_nn.txt
+      mv dN_ts.txt dN_ts_3d_nn.txt
+      mv ver_scale.txt ver_scale_3d_nn.txt
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+   cd ..
+fi
+
+# going to Mode 8
+if [ $mode -eq 8 ]; then
+   echo "--------------> Plot vertical and/or horizontal displacements for mean velocity"
+   echo "--------------> Please choose an option "
+   echo -n "Which results do you want to plot 2D or 3D [type: 2D or 3D]? "
+   read option
+   echo -n "Do you want to give the scale values in manual [type: yes or no] ? "
+   read scale_opt
+        if [ $scale_opt = "yes" ]; then
+           echo -n "Minimum scale value [mm] = "
+           read scale_min
+           echo -n "Maximum scale value [mm] = "
+           read scale_max
+        else
+           echo "Scale values are set automatically"
+        fi
+   echo " "
+
+   if [ $method = "surface" ]; then
+      method_name="surf"
+   elif [ $method = "neighbour" ]; then
+      method_name="nn"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+    
+   if [ "$option" == "2D" ]; then
+      echo "==        plot 2D result of mean velocity       ==="
+      echo "==    vertical & horizontal plots using GMT    ==="
+      echo " "
+      psfile=2D_result
+
+          # prepare ; plot vertical using surface method
+          # create CPT file for vertical displacement
+          if [ $scale_opt = "yes" ]; then
+             min=$scale_min
+             max=$scale_max
+          else
+             min=$(awk '{print $1}' ver_scale_2d_$method_name.txt | cut -d . -f1)
+             max=$(awk '{print $2}' ver_scale_2d_$method_name.txt | cut -d . -f1)
+          fi
+          gmt makecpt -T$min/$max/0.1 -N -I -Crainbow  > ver.cpt
+          gmt surface dU_2d_$method_name.txt -R$region -I$resolution -GdU_surface.grd -T0.25 -C0.1
+          scale=$(echo "($max - $min)/8" | bc)
+
+
+        # prepare; plot horizontal using surface method
+        rm -f dE_velo.txt 
+	IFS=' '
+	while read e1 e2 e3
+	do
+	   echo $e1$'\t'$e2$'\t'$e3$'\t'0$'\t'0$'\t'0$'\t'0 >> dE_velo.txt 
+	done <dE_2d_$method_name.txt
+
+        gmt grdimage dU_surface.grd -JX15 -Cver.cpt -B0.01WesN -P -Y3 -R$region -K  --MAP_FRAME_TYPE=inside > "$psfile".ps
+	gmt psvelo dE_velo.txt -R -J -W0.5p,black -Se$scale_velo/0/6 -O -K >> "$psfile".ps
+        if [ -f scale.txt ]; then
+           gmt psvelo scale.txt -J -R -Se$scale_velo/0/3 -W0.5p,black -L -V -K -O >> "$psfile".ps
+        fi
+        gmt psscale -DjCB+w4i/0.5c+o0/1.5c+h -Cver.cpt -R -J -Bx$scale+l"vertical disp (mm/yr)" -O >> "$psfile".ps
+        gmt psconvert "$psfile".ps -TG -W+k+t"PS_DISP_2d"+l256/-1 -V -E526 -V
+
+   elif [ "$option" == "3D" ]; then
+      echo "==        plot 3D result of mean velocity         ==="
+      echo "==    vertical & horizontal plots using GMT    ==="
+      echo " "
+      psfile=3D_result
+
+          # prepare ; plot vertical using surface method
+          # create CPT file for vertical displacement
+          if [ $scale_opt = "yes" ]; then
+             min=$scale_min
+             max=$scale_max
+          else
+             min=$(awk '{print $1}' ver_scale_3d_$method_name.txt | cut -d . -f1)
+             max=$(awk '{print $2}' ver_scale_3d_$method_name.txt | cut -d . -f1)
+          fi
+          gmt makecpt -T$min/$max/0.1 -N -I -Crainbow  > ver.cpt
+          gmt surface dU_3d_$method_name.txt -R$region -I$resolution -GdU_surface.grd -T0.25 -C0.1
+          scale=$(echo "($max - $min)/8" | bc)
+
+        # prepare; plot horizontal using surface method
+        rm -f dEN_velo.txt
+	IFS=' '
+	while read -r -u3 e1 e2 e3 && read -r -u4 n1 n2 n3 
+	do
+	   echo $e1$'\t'$e2$'\t'$e3$'\t'$n3$'\t'0$'\t'0$'\t'0 >> dEN_velo.txt  
+	done 3<dE_3d_$method_name.txt 4<dN_3d_$method_name.txt
+
+        gmt grdimage dU_surface.grd -JX15 -Cver.cpt -B0.01WesN -P -Y3 -R$region -K  --MAP_FRAME_TYPE=inside > "$psfile".ps
+	gmt psvelo dEN_velo.txt -R -J -W0.5p,black -Se$scale_velo/0/6 -O -K >> "$psfile".ps
+        if [ -f scale.txt ]; then
+           gmt psvelo scale.txt -J -R -Se$scale_velo/0/3 -W0.5p,black -L -V -K -O >> "$psfile".ps
+        fi
+        gmt psscale -DjCB+w4i/0.5c+o0/1.5c+h -Cver.cpt -R -J -Bx$scale+l"vertical disp (mm/yr)" -O >> "$psfile".ps
+        gmt psconvert "$psfile".ps -TG -W+k+t"PS_DISP_3d"+l256/-1 -V -E526 -V
+      
+   else
+      echo " wrong answer "
+   fi
+   echo "All done"
+   echo " "
+
+fi
+
+# going to Mode 9 
+if [ $mode -eq 9 ]; then
+   echo "--------------> Plot vertical and/or horizontal displacements for timeseries"
+   echo "--------------> Please choose an option "
+   echo -n "Which results do you want to plot 2D or 3D [type: 2D or 3D]? "
+   read option
+   echo -n "Do you want to plot the horizontal movement arrows too [type: yes or no]? "
+   read hor_opt
+   echo -n "Do you want to give the scale values in manual [type: yes or no] ? "
+   read scale_opt
+        if [ $scale_opt = "yes" ]; then
+           echo -n "Minimum scale value [mm] = "
+           read scale_min
+           echo -n "Maximum scale value [mm] = "
+           read scale_max
+        else
+           echo "Scale values are set automatically"
+        fi
+   echo " "
+
+   if [ $method = "surface" ]; then
+      method_name="surf"
+   elif [ $method = "neighbour" ]; then
+      method_name="nn"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+    
+   if [ "$option" == "2D" ]; then
+      echo "==        plot 2D results in timeseries        ==="
+      echo "==    vertical & horizontal plots using GMT    ==="
+      echo " "
+      psfile=2D_result
+
+      mkdir -p $ts_path/plot_2d_$method_name
+      t=$(head -n 1 $ts_path/dU_ts_2d_$method_name.txt | grep -o " " | wc -l)
+      t=$(expr $t + 1)
+
+      i=1
+      while [ $i -le $t ] 
+      do
+          echo "time $i"
+	  number=$(printf "%03d" "$i")
+	  rm -f dU_$number.txt dE_$number.txt dN_$number.txt dE_velo_$number.txt 
+
+	  ## dU
+	  awk -v var="$i" '{ print $var }' $ts_path/dU_ts_2d_$method_name.txt > tmp_dU.txt
+	
+          IFS=' '
+	  while read -r -u3 lon lat && read -r -u4 ver
+	  do
+	     echo $lon','$lat','$ver >> dU_$number.txt
+	  done 3< $ts_path/lonlat.txt 4<tmp_dU.txt
+
+          # plot vertical using surface method
+          # create CPT file for vertical displacement
+          if [ $scale_opt = "yes" ]; then
+             min=$scale_min
+             max=$scale_max
+          else
+             min=$(awk '{print $1}' $ts_path/ver_scale_2d_$method_name.txt | cut -d . -f1)
+             max=$(awk '{print $2}' $ts_path/ver_scale_2d_$method_name.txt | cut -d . -f1)
+          fi
+          gmt makecpt -T$min/$max/0.1 -N -I -Crainbow  > ver.cpt
+          gmt surface dU_$number.txt -R$region -I$resolution -GdU_surface.grd -T0.25 -C0.1
+          scale=$(echo "($max - $min)/8" | bc)
+
+          ## dE
+	  awk -v var="$i" '{ print $var }' $ts_path/dE_ts_2d_$method_name.txt > tmp_dE.txt
+
+          IFS=' '
+	  while read -r -u3 lon lat && read -r -u4 horE
+	  do
+	     echo $lon','$lat','$horE >> dE_$number.txt
+	  done 3< $ts_path/lonlat.txt 4<tmp_dE.txt
+
+	  IFS=','
+	  while read e1 e2 e3
+	  do
+	     echo $e1$'\t'$e2$'\t'$e3$'\t'0$'\t'0$'\t'0$'\t'0 >> dE_velo_$number.txt 
+	  done < dE_$number.txt 
+
+	  rm -f tmp_dE.txt tmp_dU.txt dU_$number.txt dE_$number.txt 
+	  rm -f "$psfile"_$number.ps
+
+	  gmt grdimage dU_surface.grd -JX15 -Cver.cpt -B0.01WesN -P -Y3 -R$region -K --MAP_FRAME_TYPE=inside > "$psfile"_$number.ps
+          if [ $hor_opt = "yes" ]; then
+             echo "with horizontal velocity"
+	     gmt psvelo dE_velo_$number.txt -R -J -W0.005p,black -Se$scale_velo/0/6 -O -K >> "$psfile"_$number.ps
+             if [ -f scale.txt ]; then
+                  gmt psvelo scale.txt -J -R -Se$scale_velo/0/3 -W0.5p,black -L -V -K -O >> "$psfile"_$number.ps
+             fi
+          else
+             echo "no horizontal velocity"
+             if [ $i -eq $t ]; then
+                echo "plot horizontal from the mean velocity (mm/year) in the end time ($i)"
+                rm -f dE_meanvel.txt
+                IFS=' '
+	        while read e1 e2 e3
+	        do
+	           echo $e1$'\t'$e2$'\t'$e3$'\t'0$'\t'0$'\t'0$'\t'0 >> dE_meanvel.txt
+	        done < dE_2d_$method_name.txt
+                gmt psvelo dE_meanvel.txt -R -J -W0.005p,black -Se$scale_velo/0/6 -O -K >> "$psfile"_$number.ps
+                if [ -f scale.txt ]; then
+                  gmt psvelo scale.txt -J -R -Se$scale_velo/0/3 -W0.5p,black -L -V -K -O >> "$psfile"_$number.ps
+                fi
+             fi
+          fi
+	  gmt psscale -DjCB+w4i/0.5c+o0/1.5c+h -Cver.cpt -R -J -Bx$scale+l"vertical disp (mm)" -O >> "$psfile"_$number.ps
+	  gmt psconvert "$psfile"_$number.ps -Tg -E128
+
+          # convert to Google Earth format in the end time
+          if [ $i -eq $t ]; then
+             gmt psconvert "$psfile"_$number.ps -TG -W+k+t"PS_DISP_2d"+l256/-1 -V -E526 -V
+             mv "$psfile"_$number.kml $ts_path/plot_2d_$method_name/.
+          fi
+          mv "$psfile"_$number.png $ts_path/plot_2d_$method_name/.
+          mv "$psfile"_$number.ps $ts_path/plot_2d_$method_name/.         
+	  rm -f dU_surface.grd dE_velo_$number.txt #"$psfile"_$number.ps
+          ((i++)) 
+      done
+
+   elif [ "$option" == "3D" ]; then
+      echo "==        plot 3D results in timeseries        ==="
+      echo "==    vertical & horizontal plots using GMT    ==="
+      echo " "
+      psfile=3D_result
+
+      mkdir -p $ts_path/plot_3d_$method_name
+      t=$(head -n 1 $ts_path/dU_ts_3d_$method_name.txt | grep -o " " | wc -l)
+      t=$(expr $t + 1)
+ 
+      i=95
+      t=95
+      while [ $i -le $t ] 
+      do
+          echo "time $i"
+	  number=$(printf "%03d" "$i")
+	  rm -f dU_$number.txt dE_$number.txt dN_$number.txt dEN_velo_$number.txt 
+
+	  ## dU
+	  awk -v var="$i" '{ print $var }' $ts_path/dU_ts_3d_$method_name.txt > tmp_dU.txt
+	
+          IFS=' '
+	  while read -r -u3 lon lat && read -r -u4 ver
+	  do
+	     echo $lon','$lat','$ver >> dU_$number.txt
+	  done 3< $ts_path/lonlat.txt 4<tmp_dU.txt
+
+          # plot vertical using surface method
+          # create CPT file for vertical displacement
+          if [ $scale_opt = "yes" ]; then
+             min=$scale_min
+             max=$scale_max
+          else
+             min=$(awk '{print $1}' $ts_path/ver_scale_3d_$method_name.txt | cut -d . -f1)
+             max=$(awk '{print $2}' $ts_path/ver_scale_3d_$method_name.txt | cut -d . -f1)
+          fi
+          gmt makecpt -T$min/$max/0.1 -N -I -Crainbow  > ver.cpt
+          gmt surface dU_$number.txt -R$region -I$resolution -GdU_surface.grd -T0.25 -C0.1
+          scale=$(echo "($max - $min)/8" | bc)
+	
+          ## dE and dN
+	  awk -v var="$i" '{ print $var }' $ts_path/dE_ts_3d_$method_name.txt > tmp_dE.txt
+	  awk -v var="$i" '{ print $var }' $ts_path/dN_ts_3d_$method_name.txt > tmp_dN.txt
+	
+          IFS=' '
+	  while read -r -u3 lon lat && read -r -u4 horE
+	  do
+	     echo $lon','$lat','$horE >> dE_$number.txt
+	  done 3< $ts_path/lonlat.txt 4<tmp_dE.txt
+
+          IFS=' '
+	  while read -r -u3 lon lat && read -r -u4 horN
+	  do
+	     echo $lon','$lat','$horN >> dN_$number.txt
+	  done 3< $ts_path/lonlat.txt 4<tmp_dN.txt
+
+	  IFS=','
+	  while read -r -u3 e1 e2 e3 && read -r -u4 n1 n2 n3 
+	  do
+	     echo $e1$'\t'$e2$'\t'$e3$'\t'$n3$'\t'0$'\t'0$'\t'0 >> dEN_velo_$number.txt 
+	  done 3<dE_$number.txt 4<dN_$number.txt
+
+	  rm -f tmp_dE.txt tmp_dU.txt tmp_dN.txt dU_$number.txt dE_$number.txt dN_$number.txt
+	  rm -f "$psfile"_$number.ps
+
+	  gmt grdimage dU_surface.grd -JX15 -Cver.cpt -B0.01WesN -P -Y3 -R$region -K  --MAP_FRAME_TYPE=inside > "$psfile"_$number.ps
+          if [ $hor_opt = "yes" ]; then
+             echo "with horizontal velocity"
+	     gmt psvelo dEN_velo_$number.txt -R -J -W0.005p,black -Se$scale_velo/0/6 -O -K >> "$psfile"_$number.ps
+             if [ -f scale.txt ]; then
+                  gmt psvelo scale.txt -J -R -Se$scale_velo/0/10 -W1p,black -L -V -K -O >> "$psfile"_$number.ps
+             fi
+          else
+             echo "no horizontal velocity"
+             if [ $i -eq $t ]; then
+                echo "plot horizontal from the mean velocity (mm/year) in the end time ($i)"
+                rm -f dEN_meanvel.txt
+                IFS=' '
+	        while read -r -u3 e1 e2 e3 && read -r -u4 n1 n2 n3 
+	        do
+	           echo $e1$'\t'$e2$'\t'$e3$'\t'$n3$'\t'0$'\t'0$'\t'0 >> dEN_meanvel.txt
+	        done 3<dE_3d_$method_name.txt 4<dN_3d_$method_name.txt
+                gmt psvelo dEN_meanvel.txt -R -J -W0.005p,black -Se$scale_velo/0/6 -O -K >> "$psfile"_$number.ps
+                if [ -f scale.txt ]; then
+                   gmt psvelo scale.txt -J -R -Se$scale_velo/0/10 -W1p,black -L -V -K -O >> "$psfile"_$number.ps
+                fi
+             fi
+          fi
+	  gmt psscale -DjCB+w4i/0.5c+o0/1.5c+h -Cver.cpt -R -J -Bx$scale+l"vertical disp (mm)" -O >> "$psfile"_$number.ps
+	  gmt psconvert "$psfile"_$number.ps -Tg -E128
+
+          # convert to Google Earth format in the end time
+          if [ $i -eq $t ]; then
+             gmt psconvert "$psfile"_$number.ps -TG -W+k+t"PS_DISP_3d"+l256/-1 -V -E526 -V
+             mv "$psfile"_$number.kml $ts_path/plot_3d_$method_name/.
+          fi
+          mv "$psfile"_$number.png $ts_path/plot_3d_$method_name/.  
+          mv "$psfile"_$number.ps $ts_path/plot_3d_$method_name/.         
+	  #rm -f dU_surface.grd dEN_velo_$number.txt #"$psfile"_$number.ps
+          ((i++)) 
+      done
+
+   else
+      echo " wrong answer "
+   fi
+   echo "All done"
+   echo " "
+fi
+
+# going to Mode 10 
+if [ $mode -eq 10 ]; then
+   echo "--------------> Plot graphic at a selected location"
+   echo "--------------> Please choose an option "
+   echo -n "Type the geo-coordinate location (min_lon/max_lon/min_lat/max_lat) [e.g: 107.005747/107.006218/-6.714181/-6.713686 or no (to use the last coordinate file)] : "
+   read coord
+   echo -n "Which result do you want to plot [type: 2D/3D/LOS] ? "
+   read plot_opt
+   echo " "
+
+   if [ $coord = "no" ]; then
+      echo "== Use the last recorded coordinates =="
+   else
+      echo $coord > $ts_path/select_location.txt
+   fi
+   location=$(cat $ts_path/select_location.txt | sed -r 's/[/]+/_/g')
+   
+   if [ $method = "surface" ]; then
+      method_name="surf"
+   elif [ $method = "neighbour" ]; then
+      method_name="nn"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+   
+   cd $ts_path
+
+   if [ "$plot_opt" == "2D" ]; then
+
+      if [ $method = "surface" ]; then
+         matlab -nodesktop -nodisplay -r "PS_DISP_plot('2d_surf');exit"
+         mv 2d_surf.png 2d_surf_$location.png
+      elif [ $method = "neighbour" ]; then
+         matlab -nodesktop -nodisplay -r "PS_DISP_plot('2d_nn');exit"
+         mv 2d_nn.png 2d_nn_$location.png
+      else
+         echo "--------------> Input for the method parameter is unknown"
+      fi
+
+   elif [ "$plot_opt" == "3D" ]; then
+
+      if [ $method = "surface" ]; then
+         matlab -nodesktop -nodisplay -r "PS_DISP_plot('3d_surf');exit"
+         mv 3d_surf.png 3d_surf_$location.png
+      elif [ $method = "neighbour" ]; then
+         matlab -nodesktop -nodisplay -r "PS_DISP_plot('3d_nn');exit"
+         mv 3d_nn.png 3d_nn_$location.png
+      else
+         echo "--------------> Input for the method parameter is unknown"
+      fi
+
+   elif [ "$plot_opt" == "LOS" ]; then
+
+      matlab -nodesktop -nodisplay -r "PS_DISP_plot('los');exit"
+      if [ $method = "surface" ]; then
+         mv LOS.png LOS_surf_$location.png
+      elif [ $method = "neighbour" ]; then
+         mv LOS.png LOS_nn_$location.png
+      else
+         echo "--------------> Input for the method parameter is unknown"
+      fi
+
+   fi
+
+   cd ..
+fi
+
+# going to Mode 11 
+if [ $mode -eq 11 ]; then
+   echo "--------------> Compute mean and standard deviation of mean velocity"
+   echo -n "Do you want to compute a spesific area (1) or a whole area (2) [type: 1 or 2]? "
+   read loc_opt
+      if [ $loc_opt = "1" ]; then
+         echo -n "Type the geo-coordinate location (min_lon/max_lon/min_lat/max_lat) [e.g: 107.005747/107.006218/-6.714181/-6.713686 or no (to use the last coordinate file] : "
+         read coord
+         if [ $coord = "no" ]; then
+            echo "== Use the last recorded coordinates =="
+         else
+            echo $coord > select_location.txt
+         fi
+      elif [ $loc_opt = "2" ]; then
+           echo $region > select_location.txt
+      else
+           echo "--------------> Input is unknown"
+      fi
+
+   echo -n "Which result do you want calculate [2D/3D] ? "
+   read std_opt
+
+   if [ $method = "surface" ]; then
+      method_name="surf"
+   elif [ $method = "neighbour" ]; then
+      method_name="nn"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+
+   if [ $std_opt == '2D' ]; then
+
+      ln -s generate_2d_$method_name.mat generate_2d.mat
+      matlab -nodesktop -nodisplay -r "PS_DISP_sta('2d_std');exit"
+
+      # re-write the result
+      mv std.txt std_tmp.txt
+      echo "Write statistical result"
+      echo ""
+      location=$(cat select_location.txt)
+      echo "LOCATION : $location" >> 2d_std.txt
+      index=$(cat index.txt);
+      echo "$index scatters have been found" >> 2d_std.txt
+      mean_dU=$(sed -n 1p std_tmp.txt)
+      echo "mean dU : $mean_dU" >> 2d_std.txt
+      std_dU=$(sed -n 2p std_tmp.txt)
+      echo "std dU : $std_dU" >> 2d_std.txt      
+      mean_dE=$(sed -n 3p std_tmp.txt)
+      echo "mean dE : $mean_dE" >> 2d_std.txt      
+      std_dE=$(sed -n 4p std_tmp.txt)
+      echo "std dE : $std_dE" >> 2d_std.txt
+      echo "" >> 2d_std.txt
+      rm std_tmp.txt index.txt generate_2d.mat   
+
+   elif [ $std_opt == '3D' ]; then
+
+      ln -s generate_3d_$method_name.mat generate_3d.mat
+      matlab -nodesktop -nodisplay -r "PS_DISP_sta('3d_std');exit"
+
+      # re-write the result
+      mv std.txt std_tmp.txt
+      echo "Write statistical result"
+      echo ""
+      location=$(cat select_location.txt)
+      echo "LOCATION : $location" >> 3d_std.txt
+      index=$(cat index.txt);
+      echo "$index scatters have been found" >> 3d_std.txt
+      mean_dU=$(sed -n 1p std_tmp.txt)
+      echo "mean dU : $mean_dU" >> 3d_std.txt
+      std_dU=$(sed -n 2p std_tmp.txt)
+      echo "std dU : $std_dU" >> 3d_std.txt      
+      mean_dE=$(sed -n 3p std_tmp.txt)
+      echo "mean dE : $mean_dE" >> 3d_std.txt      
+      std_dE=$(sed -n 4p std_tmp.txt)
+      echo "std dE : $std_dE" >> 3d_std.txt
+      mean_dN=$(sed -n 5p std_tmp.txt)
+      echo "mean dN : $mean_dN" >> 3d_std.txt      
+      std_dN=$(sed -n 6p std_tmp.txt)
+      echo "std dN : $std_dN" >> 3d_std.txt
+      echo "" >> 3d_std.txt
+      rm std_tmp.txt index.txt generate_3d.mat  
+ 
+   else
+         echo "--------------> Input for the method parameter is unknown"
+   fi
+
+fi
+
+# going to Mode 12 
+if [ $mode -eq 12 ]; then
+   echo "--------------> Compute mean and standard deviation for timeseries"
+   echo -n "Do you want to compute a spesific area (1) or a whole area (2) [type: 1 or 2]? "
+   read loc_opt
+      if [ $loc_opt = "1" ]; then
+         echo -n "Type the geo-coordinate location (min_lon/max_lon/min_lat/max_lat) [e.g: 107.005747/107.006218/-6.714181/-6.713686 or no (to use the last coordinate file] : "
+         read coord
+         if [ $coord = "no" ]; then
+            echo "== Use the last recorded coordinates =="
+         else
+            echo $coord > $ts_path/select_location.txt
+         fi
+      elif [ $loc_opt = "2" ]; then
+           echo $region > $ts_path/select_location.txt
+      else
+           echo "--------------> Input is unknown"
+      fi
+
+   echo -n "Which result do you want calculate [2D/3D] ? "
+   read std_opt
+
+   if [ $method = "surface" ]; then
+      method_name="surf"
+   elif [ $method = "neighbour" ]; then
+      method_name="nn"
+   else
+      echo "--------------> Input for the method parameter is unknown"
+   fi
+   
+   cd $ts_path
+
+   if [ $std_opt == '2D' ]; then
+
+      rm -f generate_2d.mat
+      ln -s generate_2d_$method_name.mat generate_2d.mat
+      matlab -nodesktop -nodisplay -r "PS_DISP_plot('2d_std_ts');exit"
+      location=$(cat select_location.txt | sed -r 's/[/]+/_/g')
+      mv 2d_errorbar.png 2d_errorbar_$method_name"_"$location.png
+
+      echo "Write statistical result"
+      echo ""
+      location=$(cat select_location.txt)
+      echo "LOCATION : $location" >> 2d_std.txt
+      index=$(cat index.txt);
+      echo "$index scatters have been found" >> 2d_std.txt
+      echo "" >> 2d_std.txt
+      
+
+   elif [ $std_opt == '3D' ]; then
+
+      rm -f generate_3d.mat
+      ln -s generate_3d_$method_name.mat generate_3d.mat
+      matlab -nodesktop -nodisplay -r "PS_DISP_plot('3d_std_ts');exit"
+      location=$(cat select_location.txt | sed -r 's/[/]+/_/g')
+      mv 3d_errorbar.png 3d_errorbar_$method_name"_"$location.png 
+
+      echo "Write statistical result"
+      echo ""
+      location=$(cat select_location.txt)
+      echo "LOCATION : $location" >> 3d_std.txt
+      index=$(cat index.txt);
+      echo "$index scatters have been found" >> 3d_std.txt
+      echo "" >> 3d_std.txt
+ 
+   else
+         echo "--------------> Input for the method parameter is unknown"
+   fi
+
+fi
+
+# going to Mode 13 
+if [ $mode -eq 13 ]; then
+   echo "--------------> Calculate 3d displacement from LOS and Along Track (AZI) ascending and descending data at a single different time"
+   matlab -nodesktop -nodisplay -r "3d_combo_generate('disp');exit"
+fi
