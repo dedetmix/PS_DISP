@@ -11,3 +11,5 @@ Isya, N. & Niemeier, W., 2018, Combining Sentinel-1 Ascending and Descending Dat
 Isya, N. H., Niemeier, W., and Gerke, M.: 3D ESTIMATION OF SLOW GROUND MOTION USING INSAR AND THE SLOPE ASPECT ASSUMPTION, A CASE STUDY: THE PUNCAK PASS LANDSLIDE, INDONESIA, ISPRS Ann. Photogramm. Remote Sens. Spatial Inf. Sci., IV-2/W5, 623-630, https://doi.org/10.5194/isprs-annals-IV-2-W5-623-2019, 2019. 
 
 For question and feedback, contact to : n.isya@tu-bs.de
+
+PS_DISP is free software as the result of my PhD study at TU Braunschweig: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation. It is distributed in the hope that it will be useful, but without any warranty. See the GNU General Public License for more details.
