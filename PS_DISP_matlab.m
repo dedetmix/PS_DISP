@@ -135,7 +135,7 @@ elseif strcmp(value_type,'3')
        i=1;
        for c=1:length(los_asc)
            %if (~isnan(los_asc(c,3))) && (~isnan(los_dsc(c,3))) && (~isnan(az_angle_asc(c,3))) && (~isnan(az_angle_dsc(c,3))) && (~isnan(inc_angle_asc(c,3))) && (~isnan(inc_angle_dsc(c,3))) && (~isnan(aspect(c,3))) 
-              var_angle(i,:)=[az_angle_asc(c,3),az_angle_dsc(c,3),inc_angle_asc(c,3),inc_angle_dsc(c,3),aspect(c,3)]; %if no aspect file, delete " ,aspect(c,3) " in this line
+              var_angle(i,:)=[az_angle_asc(c,3),az_angle_dsc(c,3),inc_angle_asc(c,3),inc_angle_dsc(c,3),aspect(c,3)]; % if no aspect file, delete " ,aspect(c,3) " in this line
               var_vector(i,:)=[los_asc(c,3),los_dsc(c,3)];
               var_lonlat(i,:)=[az_angle_asc(c,1),az_angle_asc(c,2)];
                i=i+1;
