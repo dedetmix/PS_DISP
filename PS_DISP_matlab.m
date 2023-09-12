@@ -200,7 +200,8 @@ elseif strcmp(value_type,'5')
           asc = char(asc{1});
           fclose(fileID);
           load(asc, 'ph_uw', 'day', 'lambda', 'lonlat')
-          ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
+          %ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
+	  ph_disp=ph_mm(:,:);
           ts_asc=ph_disp;
           day_asc=day;
           dlmwrite('lonlat_asc.txt',lonlat,'precision',8,'delimiter',',');
@@ -211,7 +212,8 @@ elseif strcmp(value_type,'5')
           dsc = char(dsc{1});
           fclose(fileID);
           load(dsc, 'ph_uw', 'day', 'lambda', 'lonlat')
-          ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
+          %ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
+	  ph_disp=ph_mm(:,:);
           ts_dsc=ph_disp;
           day_dsc=day;
           dlmwrite('lonlat_dsc.txt',lonlat,'precision',8,'delimiter',',');
