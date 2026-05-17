@@ -42,7 +42,7 @@ if strcmp(value_type,'ts')
 		B5=-sind(var_angle(c,4)).*sind(var_angle(c,2)+90);
 		B6=-sind(var_angle(c,4)).*cosd(var_angle(c,2)+90);
 		B7=0;
-		B8=cosd(theta(c,1))*cosd(90-theta(c,1));
+	        B8=cosd((90-var_angle(c,5)))/(cosd(var_angle(c,5)));
 		B9=-1;
 		B=[B1 B2 B3;B4 B5 B6;B7 B8 B9];
 	   	% calculate m --> [dU;dE;dN] vectors
@@ -51,22 +51,22 @@ if strcmp(value_type,'ts')
 	    dU_ts(:,n)=[m(1,:)'];
 	    dE_ts(:,n)=[m(2,:)'];
 	    dN_ts(:,n)=[m(3,:)'];
-	    clear B1 B2 B3 B4 B5 B6 B7 B8 B9 c A B m; 
+	    clear B1 B2 B3 B4 B5 B6 B7 B8 B9 c A B m;
 	end
 	clear n;
 
-        % arrange dN based on aspect kuadrant to Y axis (from dE)
-        for n=1:length(range)
-            for c=1:length(var_angle)
-                if (var_angle(c,5) >= 0) && (var_angle(c,5) <= 180) && (dE_ts(c,n)<= 0)
-                   dN_tmp(c,n)=dN_ts(c,n)*-1;
-                   dN_ts(c,n)=dN_tmp(c,n);
-                elseif (var_angle(c,5) > 180) && (var_angle(c,5) <= 360) && (dE_ts(c,n)>= 0)
-                   dN_tmp(c,n)=dN_ts(c,n)*-1;
-                   dN_ts(c,n)=dN_tmp(c,n);
-                end
-            end
-        end
+        % arrange dN based on aspect kuadrant
+%        for n=1:length(range)
+%            for c=1:length(var_angle)
+%                if (var_angle(c,5) >= 0) && (var_angle(c,5) <= 180) && (dE_ts(c,n)<= 0)
+%                   dN_tmp(c,n)=dN_ts(c,n)*-1;
+%                   dN_ts(c,n)=dN_tmp(c,n);
+%                elseif (var_angle(c,5) >= 180) && (var_angle(c,5) <= 360) && (dE_ts(c,n)>= 0)
+%                   dN_tmp(c,n)=dN_ts(c,n)*-1;
+%                   dN_ts(c,n)=dN_tmp(c,n);
+%                end
+%            end
+%         end
 
 	% adjust the first acq. time to be "0" value
 	dU_ts_new=zeros(size(dU_ts));
@@ -151,14 +151,14 @@ else
    dU=[var_lonlat(:,1) var_lonlat(:,2) m(1,:)'];
    dE=[var_lonlat(:,1) var_lonlat(:,2) m(2,:)'];
    dN=[var_lonlat(:,1) var_lonlat(:,2) m(3,:)'];
-   % arrange dN based on aspect kuadrant to Y axis
+   % arrange dN based on aspect kuadran
    for c=1:length(var_angle)
        if (var_angle(c,5) >= 0) && (var_angle(c,5) <= 180) && (dE(c,3)<= 0)
           dN_tmp(c,1)=dN(c,3)*-1;
           dN(c,3)=dN_tmp(c,1);
 	  X = sprintf('%i fix the aspect direction for dN',c);
 	  disp(X)
-       elseif (var_angle(c,5) > 180) && (var_angle(c,5) <= 360) && (dE(c,3)>= 0)
+       elseif (var_angle(c,5) >= 180) && (var_angle(c,5) <= 360) && (dE(c,3)>= 0)
           dN_tmp(c,1)=dN(c,3)*-1;
           dN(c,3)=dN_tmp(c,1);
 	  X = sprintf('%i fix the aspect direction for dN',c);

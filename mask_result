@@ -1,0 +1,313 @@
+select based on Amplitude Difference Dispersion (ADD) index after krigging (Surface):
+
+$ go to terminal (raw path --> sebaiknya ADD diambil dari ascending orbit karena slope menghadap timur!)
+proj_ra2ll.csh trans.dat scatter.grd scatter_ll.grd
+gmt grdmath scatter_ll.grd 0.6 LT 0 NAN scatter_ll.grd MUL = mask.grd
+gmt grdsample mask.grd -I0.000046296 -R106.99/107.02/-6.73/-6.7 -T -Gmask_re.grd
+gmt grd2xyz -R106.99/107.02/-6.73/-6.7 mask_re.grd > mask_re.xyz
+
+>> go to matlab
+delimiterIn='\t';
+mask_re=importdata('mask_re.xyz',delimiterIn);
+los_asc=importdata('los_asc_surface.xyz',delimiterIn);
+los_dsc=importdata('los_dsc_surface.xyz',delimiterIn);
+delimiterIn=' ';
+inc_angle_asc=importdata('inc_angle_asc.lld',delimiterIn);
+az_angle_asc=importdata('az_angle_asc.lld',delimiterIn);
+inc_angle_dsc=importdata('inc_angle_dsc.lld',delimiterIn);
+az_angle_dsc=importdata('az_angle_dsc.lld',delimiterIn);
+
+i=1;
+for c=1:length(los_asc)
+    if (~isnan(mask_re(c,3)))
+        var_angle(i,:)=[az_angle_asc(c,3),az_angle_dsc(c,3),inc_angle_asc(c,3),inc_angle_dsc(c,3)];
+        var_vector(i,:)=[los_asc(c,3),los_dsc(c,3)];
+        var_lonlat(i,:)=[az_angle_asc(c,1),az_angle_asc(c,2)];
+        i=i+1;
+    end
+end
+clear c i;
+
+%dst ... , go to main computation (4)
+
+if exist('dsc_surface.mat','file')
+   save('dsc_surface.mat','var_angle','-append');
+else
+   save('dsc_surface.mat','var_angle');
+end
+save('dsc_surface.mat','var_vector','-append');
+save('dsc_surface.mat','var_lonlat','-append');
+save('dsc_surface.mat','mask_re','-append');
+
+$ go to terminal (to plot and display on GE)
+#for vertical direction
+rm -f dU_velo.txt
+gmt xyz2grd dU.txt -Dm/m/m/1/0 -GdU.grd -I0.000046296 -R106.99/107.02/-6.73/-6.7
+gmt grdsample dU.grd -I0.000138889 -GdU_re.grd
+gmt grd2xyz -R106.99/107.02/-6.73/-6.7 dU_re.grd > dU_re.txt
+while read p1 p2 p3
+do
+echo $p1$'\t'$p2$'\t'0$'\t'$p3$'\t'0$'\t'0$'\t'0 >> dU_velo.txt 
+done < dU_re.txt
+
+#for eastward direction
+rm -f dE_velo.txt
+gmt xyz2grd dE.txt -Dm/m/m/1/0 -GdE.grd -I0.000046296 -R106.99/107.02/-6.73/-6.7
+gmt grdsample dE.grd -I0.000138889 -GdE_re.grd
+gmt grd2xyz -R106.99/107.02/-6.73/-6.7 dE_re.grd > dE_re.txt
+while read p1 p2 p3
+do
+echo $p1$'\t'$p2$'\t'$p3$'\t'0$'\t'0$'\t'0$'\t'0 >> dE_velo.txt 
+done < dE_re.txt
+
+#for horizontal direction (+ north)
+rm -f dEN_velo.txt
+gmt xyz2grd dN.txt -Dm/m/m/1/0 -GdN.grd -I0.000046296 -R106.99/107.02/-6.73/-6.7
+gmt grdsample dN.grd -I0.000138889 -GdN_re.grd
+#gmt grdclip tmp.grd -GdN_re.grd -Sa20/NaN -Sb-20/NaN -V
+#rm tmp.grd
+gmt grd2xyz -R106.99/107.02/-6.73/-6.7 dN_re.grd > dN_re.txt
+while read -r -u3 e1 e2 e3 && read -r -u4 n1 n2 n3 
+do
+echo $e1$'\t'$e2$'\t'$e3$'\t'$n3$'\t'0$'\t'0$'\t'0 >> dEN_velo.txt 
+done 3<dE_re.txt 4<dN_re.txt
+
+# edit aspect_geo.txt (replace , to . manually, replace ; to space manually)
+rm -f aspect.txt
+while read value long lat; do echo "$long","$lat","$value" >> aspect.txt; done < aspect_geo.txt
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% cut area scatter
+
+% select coordinate with interval range
+for c=1:length(var_lonlat)
+if (var_lonlat(c,1) >=106.993181) && (var_lonlat(c,1) <=106.997125)
+lon(c)=var_lonlat(c,1);
+else
+lon(c)=nan;
+end
+end
+
+for c=1:length(var_lonlat)
+if (var_lonlat(c,2) >=-6.709402) && (var_lonlat(c,2) <=-6.704735)
+lat(c)=var_lonlat(c,2);
+else
+lat(c)=nan;
+end
+end
+
+% reshape
+lon=lon';
+lat=lat';
+
+% select coordinate having value
+for c=1:length(var_lonlat)
+if (~isnan(lon(c,1))) && (~isnan(lat(c,1)))
+lat_cut(c)=lat(c,1);
+lon_cut(c)=lon(c,1);
+dN_ts_cut(c,:)=dN_ts(c,:);
+end
+end
+
+% reshape
+lat_cut=lat_cut';
+lon_cut=lon_cut';
+dN_ts_cut=dN_ts_cut';
+
+% remove 0 value
+lat_cut(lat_cut==0)=[];
+lon_cut(lon_cut==0)=[];
+
+tes=dN_ts_cut;
+tes=tes';
+tes(tes==0) = [];
+tes=reshape(tes,88,length(lon_cut));
+tes=tes';
+dN_ts_cut=tes;
+clear tes
+
+%%%%% find index for vector dE, dN or dU , los_asc, los_dsc near to Puncak Pass Landslide %%%%%
+Big:
+%Blat=find(var_lonlat(:,2)>-6.73 & var_lonlat(:,2)<-6.7);
+%Blon=find(var_lonlat(:,1)>106.99 & var_lonlat(:,1)<107.02);
+Mask DSC 01:
+Blat=find(var_lonlat(:,2)>-6.728465 & var_lonlat(:,2)<-6.726994);
+Blon=find(var_lonlat(:,1)>107.014030 & var_lonlat(:,1)<107.015197);
+
+Puncak Highway (high signal detected after 3d generation)
+Blat=find(var_lonlat(:,2)>-6.714181 & var_lonlat(:,2)<-6.713686);
+Blon=find(var_lonlat(:,1)>107.005747& var_lonlat(:,1)<107.006218);
+
+Puncak highway tes
+Blat=find(var_lonlat(:,2)>-6.714166 & var_lonlat(:,2)<-6.713736);
+Blon=find(var_lonlat(:,1)>107.005786 & var_lonlat(:,1)<107.006292);
+
+Puncakpass_atas:
+Blat=find(var_lonlat(:,2)>-6.706263 & var_lonlat(:,2)<-6.705995);
+Blon=find(var_lonlat(:,1)>106.993892 & var_lonlat(:,1)<106.994032);
+Puncakpass_bawah:
+Blat=find(var_lonlat(:,2)>-6.706589 & var_lonlat(:,2)<-6.706368);
+Blon=find(var_lonlat(:,1)>106.994131 & var_lonlat(:,1)<106.994317);
+
+Extensometer:
+Blat=find(var_lonlat(:,2)>-6.707933 & var_lonlat(:,2)<-6.707348);
+Blon=find(var_lonlat(:,1)>106.995259 & var_lonlat(:,1)<106.995680);
+
+China tes:
+Blat=find(var_lonlat(:,2)>30.455511 & var_lonlat(:,2)<30.458959);
+Blon=find(var_lonlat(:,1)>90.548894 & var_lonlat(:,1)<90.553386);
+
+China tes2:
+Blat=find(var_lonlat(:,2)>30.488869 & var_lonlat(:,2)<30.489523);
+Blon=find(var_lonlat(:,1)>90.595108 & var_lonlat(:,1)<90.596234);
+
+Blast=ismember(Blat,Blon);
+indexes=find(Blast);
+index=Blat(indexes);
+
+%dE
+for c=1:length(index)
+dE_tes(:,c)=dE_ts_new(index(c,1),:);
+c=c+1;
+end
+dE_tes=dE_tes'; clear c;
+%dN
+for c=1:length(index)
+dN_tes(:,c)=dN_ts_new(index(c,1),:);
+c=c+1;
+end
+dN_tes=dN_tes'; clear c;
+%dU
+for c=1:length(index)
+dU_tes(:,c)=dU_ts_new(index(c,1),:);
+c=c+1;
+end
+dU_tes=dU_tes'; clear c;
+%lonlat
+lonlat_tes=zeros(length(index),2);
+for c=1:length(index)
+lonlat_tes(c,:)=[var_lonlat(index(c),1) var_lonlat(index(c),2)];
+c=c+1;
+end
+clear c;
+
+%los_asc
+	for c=1:length(index)
+	los_asc_tes3(:,c)=los_asc(index(c,1),:);
+	vslope_asc_tes3(:,c)=vslope_asc(index(c,1),:);
+	c_asc_tes3(:,c)=C_asc(index(c,1),:);
+        ri_asc_tes3(:,c)=r_index_asc(index(c,1),:);         
+	c=c+1;
+	end
+	vslope_asc_tes3=vslope_asc_tes3'; clear c;
+        c_asc_tes3=c_asc_tes3';
+        los_asc_tes3=los_asc_tes3(:,3)';
+        ri_asc_tes3=ri_asc_tes3';
+%los_dsc
+	for c=1:length(index)
+	los_dsc_tes3(:,c)=los_dsc(index(c,1),:);
+	vslope_dsc_tes3(:,c)=vslope_dsc(index(c,1),:);
+	c_dsc_tes3(:,c)=C_dsc(index(c,1),:);
+        ri_dsc_tes3(:,c)=r_index_dsc(index(c,1),:);   
+	c=c+1;
+	end
+	vslope_dsc_tes3=vslope_dsc_tes3'; clear c;
+        c_dsc_tes3=c_dsc_tes3';
+        los_dsc_tes3=los_dsc_tes3(:,3)';
+        ri_dsc_tes3=ri_dsc_tes3';
+%aspect
+	for c=1:length(index)
+	aspect_tes3(:,c)=aspect(index(c,1),:); 
+	c=c+1;
+	end
+	aspect_tes3=aspect_tes3'; clear c;
+
+% see the vertical scale for plotting
+Umin=min(dU_tes);
+Umax=max(dU_tes);
+scale=[min(Umin) max(Umax)];
+
+dlmwrite('dN_ts2.txt',dN_tes,'precision',8,'delimiter',' ');
+dlmwrite('dE_ts2.txt',dE_tes,'precision',8,'delimiter',' ');
+dlmwrite('dU_ts2.txt',dU_tes,'precision',8,'delimiter',' ');
+dlmwrite('lonlat2.txt',lonlat_tes,'precision',8,'delimiter',' ');
+dlmwrite('ver_scale.txt',scale,'precision',8,'delimiter',' ');
+
+clear Blast Nlat Blon Blat indexes index lonlat_tes dE_tes dN_tes dU_tes Umin Umax scale;
+
+% plot scatter warna
+colormat = rand(length(index),3);
+for c=1:length(index)
+scatter(range,dU_tes(c,:),20,colormat(c,:),'filled')
+hold on;
+end
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PLOT
+dE_mean_plot=dE(:,3)/365.25;
+for c=1:length(index)
+dE_plot(c,:)=(dE_mean_plot(c,1)*day)+(dE_tes(c,1));
+c=c+1;
+end
+clear c;
+
+PLOT SUBFIGURE
+%%%%%%%%%%%%%%%%%%%%
+figure
+subplot(1,2,1)
+scatter(aspect(:,3),r_index_asc,0.04,'b')
+hold on;
+scatter(aspect_tes3(:,3),ri_asc_tes3,2,'k')
+xlabel('Aspect')
+ylabel('R-Index')
+title('R-Index for Sentinel-1 Ascending')
+subplot(1,2,2)
+scatter(aspect(:,3),r_index_dsc,0.04,'r')
+hold on;
+scatter(aspect_tes3(:,3),ri_dsc_tes3,2,'k')
+xlabel('Aspect')
+ylabel('R-Index')
+title('R-Index for Sentinel-1 Descending')
+
+% lon lat TS4
+Blat=find(var_lonlat(:,2)>-6.707232 & var_lonlat(:,2)<-6.707158);
+Blon=find(var_lonlat(:,1)>106.995961 & var_lonlat(:,1)<106.996040);
+
+PLOT Scatters3 with Colorbar from Z Value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+scatter3(var_lonlat(:,1),var_lonlat(:,2),dU_ts_new(:,88),5,dU_ts_new(:,88))
+view(0,90)
+colormap(jet)
+colorbar
+
+Detrend Time Series
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+1. Unwrap Error detrend
+%%%
+mean_ts_asc_tes=mean(ts_asc_tes);
+err=(lambda*1000/4)*ones(size(day));
+diff=zeros(1,length(day));
+for c=2:length(day)
+    diff(1,c)=mean_ts_asc_tes(1,c)-mean_ts_asc_tes(1,c-1);
+end
+diff=diff+mean_ts_asc_tes;
+%PLOT
+figure
+errorbar(day,mean_ts_dsc_tes,err,'-s','Markersize',5,'MarkerEdgeColor','red','MarkerFaceColor','red')
+datetick('x','mmm-yy','keeplimits')
+hold on;
+scatter(day,diff,20,'b','filled')
+hold on;
+[ax, p1, p2]=plotyy(day,mean_ts_asc_tes,per_month(:,1),per_month(:,2));
+%delete P2
+hold(ax(2),'on')
+B=bar(per_month(:,1),per_month(:,2),'FaceColor','white');
+B.FaceAlpha = 0.2;
+hold(ax(2),'on')
+plot(per_month(:,1),per_month(:,2),'k','LineWidth',0.75) 
+ylabel(ax(2),'precipitation /month (mm)')
+ylabel(ax(1),'LOS asc (mm)')
+set(ax(1),'ycolor','k')
+set(ax(2),'ycolor','b')
+
+% numpang source link regional heave and phase unwarpped example
+https://learninglegacy.crossrail.co.uk/documents/use-insar-interferometric-synthetic-aperture-radar-complement-control-construction-protect-third-party-assets/

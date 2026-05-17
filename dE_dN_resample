@@ -1,0 +1,16 @@
+resolution=0.000138889
+gmt xyz2grd dE_3d_nn_ORI.txt -Ddegree/degree/degree/1/0 -GdE_resamp.grd -I$resolution -R$region -V
+gmt grd2xyz -R$region dE_resamp.grd > dE_3d_nn.txt
+sed -i $'s/\t/ /g' dE_3d_nn.txt
+gmt xyz2grd dN_3d_nn_ORI.txt -Ddegree/degree/degree/1/0 -GdN_resamp.grd -I$resolution -R$region -V
+gmt grd2xyz -R$region dN_resamp.grd > dN_3d_nn.txt
+sed -i $'s/\t/ /g' dN_3d_nn.txt
+
+resolution=0.000138889
+gmt xyz2grd dE_3d_SF_ORI.txt -Ddegree/degree/degree/1/0 -GdE_resamp.grd -I$resolution -R$region -V
+gmt grd2xyz -R$region dE_resamp.grd > dE_3d_SF.txt
+sed -i $'s/\t/ /g' dE_3d_SF.txt
+gmt xyz2grd dN_3d_SF_ORI.txt -Ddegree/degree/degree/1/0 -GdN_resamp.grd -I$resolution -R$region -V
+gmt grd2xyz -R$region dN_resamp.grd > dN_3d_SF.txt
+sed -i $'s/\t/ /g' dN_3d_SF.txt
+

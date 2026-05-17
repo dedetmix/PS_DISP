@@ -56,6 +56,7 @@ elseif strcmp(value_type,'2')
        los_dsc=importdata('los_dsc_surface.xyz',delimiterIn);
        mask_re=importdata('mask_re.xyz',delimiterIn);
        aspect=importdata('aspect.xyz',delimiterIn);
+      %slope=importdata('slope.xyz',delimiterIn); % uncomment if use slope too
        if exist('data.mat','file')
           save('data.mat','los_asc','-append');
        else
@@ -63,6 +64,7 @@ elseif strcmp(value_type,'2')
        end
           save('data.mat','los_dsc','-append');
           save('data.mat','aspect','-append');
+         %save('data.mat','slope','-append'); % uncomment if use slope too
     
        % save azimuth and incedence angle
        delimiterIn='\t';
@@ -109,6 +111,7 @@ elseif strcmp(value_type,'3')
        los_asc=importdata('los_asc_nn.xyz',delimiterIn);
        los_dsc=importdata('los_dsc_nn.xyz',delimiterIn);
        aspect=importdata('aspect.xyz',delimiterIn);
+      %slope=importdata('slope.xyz',delimiterIn); % uncomment if use slope too
        if exist('data.mat','file')
           save('data.mat','los_asc','-append');
        else
@@ -116,6 +119,7 @@ elseif strcmp(value_type,'3')
        end
           save('data.mat','los_dsc','-append');
           save('data.mat','aspect','-append');
+         %save('data.mat','slope','-append'); % uncomment if use slope too
     
        % save incedence angle
        delimiterIn='\t';
@@ -135,9 +139,10 @@ elseif strcmp(value_type,'3')
        i=1;
        for c=1:length(los_asc)
            if (~isnan(los_asc(c,3))) && (~isnan(los_dsc(c,3))) && (~isnan(az_angle_asc(c,3))) && (~isnan(az_angle_dsc(c,3))) && (~isnan(inc_angle_asc(c,3))) && (~isnan(inc_angle_dsc(c,3))) && (~isnan(aspect(c,3))) 
-              var_angle(i,:)=[az_angle_asc(c,3),az_angle_dsc(c,3),inc_angle_asc(c,3),inc_angle_dsc(c,3),aspect(c,3)]; % if no aspect file, delete " ,aspect(c,3) " in this line
+              var_angle(i,:)=[az_angle_asc(c,3),az_angle_dsc(c,3),inc_angle_asc(c,3),inc_angle_dsc(c,3),aspect(c,3)];
               var_vector(i,:)=[los_asc(c,3),los_dsc(c,3)];
               var_lonlat(i,:)=[az_angle_asc(c,1),az_angle_asc(c,2)];
+              %var_slope(i,:)=[slope(c,3)];
                i=i+1;
            end
        end
@@ -150,6 +155,7 @@ elseif strcmp(value_type,'3')
        end
        save('data_match.mat','var_vector','-append');
        save('data_match.mat','var_lonlat','-append');
+       %save('data_match.mat','var_slope','-append');
 
 elseif strcmp(value_type,'4')
 
@@ -200,8 +206,7 @@ elseif strcmp(value_type,'5')
           asc = char(asc{1});
           fclose(fileID);
           load(asc, 'ph_uw', 'day', 'lambda', 'lonlat')
-          %ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
-	  ph_disp=ph_mm(:,:);
+          ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
           ts_asc=ph_disp;
           day_asc=day;
           dlmwrite('lonlat_asc.txt',lonlat,'precision',8,'delimiter',',');
@@ -212,8 +217,7 @@ elseif strcmp(value_type,'5')
           dsc = char(dsc{1});
           fclose(fileID);
           load(dsc, 'ph_uw', 'day', 'lambda', 'lonlat')
-          %ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
-	  ph_disp=ph_mm(:,:);
+          ph_disp=-ph_uw(:,:)*lambda*1000/(4*pi);
           ts_dsc=ph_disp;
           day_dsc=day;
           dlmwrite('lonlat_dsc.txt',lonlat,'precision',8,'delimiter',',');

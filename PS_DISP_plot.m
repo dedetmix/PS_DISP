@@ -2,6 +2,7 @@ function [mode]=PS_DISP_plot(value_type,varargin)
 
 % 13.09.2018	NI	; Plot 2D/3D/LOS results
 % 28.09.2018	NI	; Calculate mean, standard deviation and precision
+% 10.07.2019	Ni	; Add 3D surface parallel flow + slope aspect and optimization
 
 % TYPE
 % PS_DISP_plot('3d_nn') = to plot 3d results from nearneighbour method
@@ -11,6 +12,8 @@ function [mode]=PS_DISP_plot(value_type,varargin)
 % PS_DISP_plot('los') = to plot LOS asc & dsc results from surface/nearneighbour method
 % PS_DISP_plot('2d_std_ts') = to calculate and plot mean and standard deviation from 2D mode for time series
 % PS_DISP_plot('3d_std_ts') = to calculate and plot mean and standard deviation from 3D mode for time series
+% PS_DISP_plot('3d_SF') = to plot 3d results from surface-farallel-flow with slope aspect consideration, the generated gridding method is taken from the last processing gridding method [default: NN].
+% PS_DISP_plot('3d_SF_opt') = to plot 3d results from the optimization of surface-farallel-flow with slope aspect consideration, the generated gridding method is taken from the last processing gridding method [default: NN].
 
 % Note:
 % define "select_location.txt" !
@@ -70,7 +73,7 @@ if strcmp(value_type,'3d_nn')
       plot(range,mean(dU_tes),'k','LineWidth',1);
    end
    ylabel('dU disp (mm)')
-   title('3D results from nearneighbour method')
+   title('3D results from nearneighbor method')
    %h1 = lsline;
    %h1.LineWidth = 3;
    
@@ -103,7 +106,16 @@ if strcmp(value_type,'3d_nn')
    %h3 = lsline;
    %h3.LineWidth = 3;
 
-   print(gcf,'3d_nn.png','-dpng','-r300');  
+   print(gcf,'3d_nn.png','-dpng','-r300');
+
+        % save data tes
+        if exist('plot_nn.mat','file')
+	   save('plot_nn.mat','dU_tes','-append');
+	else
+	   save('plot_nn.mat','dU_tes');
+	end
+	save('plot_nn.mat','dE_tes','-append');
+	save('plot_nn.mat','dN_tes','-append');
 
 elseif strcmp(value_type,'3d_surf')
 
@@ -166,6 +178,148 @@ elseif strcmp(value_type,'3d_surf')
    %h3.LineWidth = 3;
 
    print(gcf,'3d_surf.png','-dpng','-r600');
+
+elseif strcmp(value_type,'3d_SF')
+
+   load('generate_3d_SF.mat','dU_ts_new','dE_ts_new','dN_ts_new');
+   % Create selected data
+   for c=1:length(index)
+       dU_tes(:,c)=dU_ts_new(index(c,1),:);
+       dE_tes(:,c)=dE_ts_new(index(c,1),:);
+       dN_tes(:,c)=dN_ts_new(index(c,1),:);
+   end
+   dU_tes=dU_tes';
+   dE_tes=dE_tes';
+   dN_tes=dN_tes';
+   % Plot timeseries scatters
+   figure('rend','painters','pos',[10 10 1200 800])
+   colormat = rand(length(index),3);
+   
+   % Plot dU
+   subplot(3,1,1);
+   for c=1:length(index)
+       scatter(range,dU_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dU_tes),'k','LineWidth',1);
+   end
+   ylabel('dU disp (mm)')
+   title('3D results (method: the fusion aspect + surface-parallel-flow, gridding: NN)')
+   %h1 = lsline;
+   %h1.LineWidth = 3;
+   
+   % Plot dE
+   subplot(3,1,2);
+   for c=1:length(index)
+       scatter(range,dE_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dE_tes),'k','LineWidth',1);
+   end
+   ylabel('dE disp (mm)')
+   %h2 = lsline;
+   %h2.LineWidth = 3;
+
+   % Plot dN
+   subplot(3,1,3);
+   for c=1:length(index)
+       scatter(range,dN_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dN_tes),'k','LineWidth',1);
+   end
+   ylabel('dN disp (mm)')
+   xlabel('time')
+   %h3 = lsline;
+   %h3.LineWidth = 3;
+
+   print(gcf,'3d_SF.png','-dpng','-r600');
+
+        % save data tes
+        if exist('plot_SF.mat','file')
+	   save('plot_SF.mat','dU_tes','-append');
+	else
+	   save('plot_SF.mat','dU_tes');
+	end
+	save('plot_SF.mat','dE_tes','-append');
+	save('plot_SF.mat','dN_tes','-append');
+
+elseif strcmp(value_type,'3d_SF_opt')
+
+   load('generate_3d_SF_opt.mat','dU_ts_new','dE_ts_new','dN_ts_new');
+   % Create selected data
+   for c=1:length(index)
+       dU_tes(:,c)=dU_ts_new(index(c,1),:);
+       dE_tes(:,c)=dE_ts_new(index(c,1),:);
+       dN_tes(:,c)=dN_ts_new(index(c,1),:);
+   end
+   dU_tes=dU_tes';
+   dE_tes=dE_tes';
+   dN_tes=dN_tes';
+   % Plot timeseries scatters
+   figure('rend','painters','pos',[10 10 1200 800])
+   colormat = rand(length(index),3);
+   
+   % Plot dU
+   subplot(3,1,1);
+   for c=1:length(index)
+       scatter(range,dU_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dU_tes),'k','LineWidth',1);
+   end
+   ylabel('dU disp (mm)')
+   title('3D results (method: the optimization of surface-parallel-flow + aspect, gridding: NN)')
+   %h1 = lsline;
+   %h1.LineWidth = 3;
+   
+   % Plot dE
+   subplot(3,1,2);
+   for c=1:length(index)
+       scatter(range,dE_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dE_tes),'k','LineWidth',1);
+   end
+   ylabel('dE disp (mm)')
+   %h2 = lsline;
+   %h2.LineWidth = 3;
+
+   % Plot dN
+   subplot(3,1,3);
+   for c=1:length(index)
+       scatter(range,dN_tes(c,:),5,colormat(c,:),'filled')
+       hold on;
+   end
+   datetick('x','mm-yy','keepticks')
+   if (index >= 10)
+      plot(range,mean(dN_tes),'k','LineWidth',1);
+   end
+   ylabel('dN disp (mm)')
+   xlabel('time')
+   %h3 = lsline;
+   %h3.LineWidth = 3;
+
+   print(gcf,'3d_SF_opt.png','-dpng','-r600');
+
+        % save data tes
+        if exist('plot_SF_opt.mat','file')
+	   save('plot_SF_opt.mat','dU_tes','-append');
+	else
+	   save('plot_SF_opt.mat','dU_tes');
+	end
+	save('plot_SF_opt.mat','dE_tes','-append');
+	save('plot_SF_opt.mat','dN_tes','-append');
  
 elseif strcmp(value_type,'2d_nn')
    
