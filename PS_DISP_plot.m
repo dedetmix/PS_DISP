@@ -70,7 +70,7 @@ if strcmp(value_type,'3d_nn')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dU_tes),'k','LineWidth',1);
+      plot(range,mean(dU_tes),'k','LineWidth',3);
    end
    ylabel('dU disp (mm)')
    title('3D results from nearneighbor method')
@@ -85,7 +85,7 @@ if strcmp(value_type,'3d_nn')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dE_tes),'k','LineWidth',1);
+      plot(range,mean(dE_tes),'k','LineWidth',3);
    end
    ylabel('dE disp (mm)')
    %h2 = lsline;
@@ -99,7 +99,7 @@ if strcmp(value_type,'3d_nn')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dN_tes),'k','LineWidth',1);
+      plot(range,mean(dN_tes),'k','LineWidth',3);
    end
    ylabel('dN disp (mm)')
    xlabel('time')
@@ -203,10 +203,10 @@ elseif strcmp(value_type,'3d_SF')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dU_tes),'k','LineWidth',1);
+      plot(range,mean(dU_tes),'k','LineWidth',3);
    end
-   ylabel('dU disp (mm)')
-   title('3D results (method: the fusion aspect + surface-parallel-flow, gridding: NN)')
+   ylabel('dU disp (mm)', 'FontSize', 13, 'FontWeight', 'bold');
+   title('3D results (method: the fusion aspect + surface-parallel-flow, gridding: NN)', 'FontSize', 14, 'FontWeight', 'bold')
    %h1 = lsline;
    %h1.LineWidth = 3;
    
@@ -218,9 +218,9 @@ elseif strcmp(value_type,'3d_SF')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dE_tes),'k','LineWidth',1);
+      plot(range,mean(dE_tes),'k','LineWidth',3);
    end
-   ylabel('dE disp (mm)')
+   ylabel('dE disp (mm)', 'FontSize', 13, 'FontWeight', 'bold')
    %h2 = lsline;
    %h2.LineWidth = 3;
 
@@ -232,10 +232,10 @@ elseif strcmp(value_type,'3d_SF')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dN_tes),'k','LineWidth',1);
+      plot(range,mean(dN_tes),'k','LineWidth',3);
    end
-   ylabel('dN disp (mm)')
-   xlabel('time')
+   ylabel('dN disp (mm)', 'FontSize', 13, 'FontWeight', 'bold')
+   xlabel('time', 'FontSize', 13, 'FontWeight', 'bold')
    %h3 = lsline;
    %h3.LineWidth = 3;
 
@@ -274,10 +274,11 @@ elseif strcmp(value_type,'3d_SF_opt')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dU_tes),'k','LineWidth',1);
+      %plot(range, mean(dU_tes), '-ok', 'LineWidth', 4, 'MarkerSize', 8, 'MarkerFaceColor', 'b');
+      plot(range,mean(dU_tes),'k','LineWidth',6);
    end
-   ylabel('dU disp (mm)')
-   title('3D results (method: the optimization of surface-parallel-flow + aspect, gridding: NN)')
+   ylabel('dU disp (mm)', 'FontSize', 14, 'FontWeight', 'bold')
+   title('3D results (method: the optimization of surface-parallel-flow + aspect, gridding: NN)', 'FontSize', 15, 'FontWeight', 'bold')
    %h1 = lsline;
    %h1.LineWidth = 3;
    
@@ -289,9 +290,10 @@ elseif strcmp(value_type,'3d_SF_opt')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dE_tes),'k','LineWidth',1);
+      %plot(range, mean(dE_tes), '-ok', 'LineWidth', 4, 'MarkerSize', 8, 'MarkerFaceColor', 'b');
+      plot(range,mean(dE_tes),'k','LineWidth',6);
    end
-   ylabel('dE disp (mm)')
+   ylabel('dE disp (mm)', 'FontSize', 14, 'FontWeight', 'bold')
    %h2 = lsline;
    %h2.LineWidth = 3;
 
@@ -303,10 +305,11 @@ elseif strcmp(value_type,'3d_SF_opt')
    end
    datetick('x','mm-yy','keepticks')
    if (index >= 10)
-      plot(range,mean(dN_tes),'k','LineWidth',1);
+      %plot(range, mean(dN_tes), '-ok', 'LineWidth', 4, 'MarkerSize', 8, 'MarkerFaceColor', 'b');
+      plot(range,mean(dN_tes),'k','LineWidth',6);
    end
-   ylabel('dN disp (mm)')
-   xlabel('time')
+   ylabel('dN disp (mm)', 'FontSize', 14, 'FontWeight', 'bold')
+   xlabel('time', 'FontSize', 14, 'FontWeight', 'bold')
    %h3 = lsline;
    %h3.LineWidth = 3;
 
